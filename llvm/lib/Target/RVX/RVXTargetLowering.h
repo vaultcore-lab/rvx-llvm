@@ -92,7 +92,38 @@ private:
                          const SmallVectorImpl<ISD::OutputArg> &Outs,
                          bool IsRet, CallLoweringInfo *CLI) const;
 }; 
-   
 
+namespace RVXISD{
+
+enum NodeType : unsigned{
+    FIRST_NUMBER = ISD::BUILTIN_OP_END, 
+    HI20, 
+    ADD_LO, 
+    PCREL_HI20, 
+    PCREL_LO, 
+    CALL, 
+    RET_FLAG, 
+    TAIL, 
+    SELECT_CC, 
+
+    //shift op
+    SLLW, 
+    SRAW, 
+    ADDW, 
+    SUBW,
+
+    //atomic extension 
+    LR_W, 
+    SC_W,
+    LR_D,
+
+    //floating point 
+    FMOV_W_GPR, 
+    FMOV_GPR_W, 
+
+    LAST_RVX_ISD_OPCODE
+}; 
+
+}
 
 }
