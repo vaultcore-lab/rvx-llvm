@@ -204,9 +204,101 @@ RVXTargetLowering::RVXTargetLowering(const TargetMachine &TM,
     if (STI.is64Bit())
         setTruncStoreAction(MVT::i64, MVT::i32, Legal); // SW
 
+    if (STI.hasStdExtF()) {
+        setCondCodeAction(ISD::SETONE, MVT::f32, Expand);
+        setCondCodeAction(ISD::SETUEQ, MVT::f32, Expand);
+        setCondCodeAction(ISD::SETUGT, MVT::f32, Expand);
+        setCondCodeAction(ISD::SETUGE, MVT::f32, Expand);
+        setCondCodeAction(ISD::SETULT, MVT::f32, Expand);
+        setCondCodeAction(ISD::SETULE, MVT::f32, Expand);
+    }
+}
 
+const char *RVXTargetLowering::getTargetNodeName(unsigned Opcode) const {
+    switch ((RVXISD::NodeType)Opcode) {
+        case RVXISD::FIRST_NUMBER:    break;
+        case RVXISD::HI20:            return "RVXISD::HI20";
+        case RVXISD::ADD_LO:          return "RVXISD::ADD_LO";
+        case RVXISD::PCREL_HI20:      return "RVXISD::PCREL_HI20";
+        case RVXISD::PCREL_LO:        return "RVXISD::PCREL_LO";
+        case RVXISD::CALL:            return "RVXISD::CALL";
+        case RVXISD::RET_FLAG:        return "RVXISD::RET_FLAG";
+        case RVXISD::TAIL:            return "RVXISD::TAIL";
+        case RVXISD::SELECT_CC:       return "RVXISD::SELECT_CC";
+        case RVXISD::SLLW:            return "RVXISD::SLLW";
+        case RVXISD::SRLW:            return "RVXISD::SRLW";
+        case RVXISD::SRAW:            return "RVXISD::SRAW";
+        case RVXISD::ADDW:            return "RVXISD::ADDW";
+        case RVXISD::SUBW:            return "RVXISD::SUBW";
+        case RVXISD::LR_W:            return "RVXISD::LR_W";
+        case RVXISD::SC_W:            return "RVXISD::SC_W";
+        case RVXISD::LR_D:            return "RVXISD::LR_D";
+        case RVXISD::SC_D:            return "RVXISD::SC_D";
+        case RVXISD::FMOV_W_GPR:      return "RVXISD::FMOV_W_GPR";
+        case RVXISD::FMOV_GPR_W:      return "RVXISD::FMOV_GPR_W";
+        case RVXISD::LAST_RVX_ISD_OPCODE: break;
+        }
+        return nullptr;
+    }
 
+MVT RVXTargetLowering::getXLenVT() const {
+    return STI.getXLenVT();
+}
 
+SDValue RVXTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const{
 
+    switch (Op.getOpcode()){
+        case ISD::GlobalAddress: 
+            return LowerGlobalAddress(Op, DAG);
+        case ISD::BlockAddress: 
+            return LowerBlockAddress(Op, DAG);
+        case ISD::ExternalSymbol: 
+            return LowerExternalSymbol(Op, DAG);
+        case ISD::JumpTable: 
+            return LowerJumpTable(Op, DAG);
+        case ISD::ConstantPool: 
+            return LowerConstantPool(Op, DAG); 
+
+        case ISD::VASTART:          
+            return LowerVASTART(Op, DAG);
+        case ISD::SELECT:
+        case ISD::SELECT_CC:        
+            return LowerSELECT(Op, DAG);
+        case ISD::BR_CC:            
+            return LowerBRCOND(Op, DAG);
+
+         // ---- RV64 32-bit operations --------------------------------------------
+        case ISD::ADD:
+            if (STI.is64Bit() && Op.getValueType() == MVT::i32)
+                return DAG.getNode(RVXISD::ADDW, SDLoc(Op), MVT::i32,
+                                Op.getOperand(0), Op.getOperand(1));
+            break;
+        case ISD::SUB:
+            if (STI.is64Bit() && Op.getValueType() == MVT::i32)
+                return DAG.getNode(RVXISD::SUBW, SDLoc(Op), MVT::i32,
+                                Op.getOperand(0), Op.getOperand(1));
+            break;
+        case ISD::SHL:
+            if (STI.is64Bit() && Op.getValueType() == MVT::i32)
+                return DAG.getNode(RVXISD::SLLW, SDLoc(Op), MVT::i32,
+                                Op.getOperand(0), Op.getOperand(1));
+            break;
+        case ISD::SRL:
+            if (STI.is64Bit() && Op.getValueType() == MVT::i32)
+                return DAG.getNode(RVXISD::SRLW, SDLoc(Op), MVT::i32,
+                                   Op.getOperand(0), Op.getOperand(1));
+            break;
+        case ISD::SRA:
+            if (STI.is64Bit() && Op.getValueType() == MVT::i32)
+                return DAG.getNode(RVXISD::SRAW, SDLoc(Op), MVT::i32,
+                                Op.getOperand(0), Op.getOperand(1));
+            break;
+
+        default:
+            llvm_unreachable("LowerOperation called on node that is not Custom");   
+     }
+
+    return SDValue(); 
 
 }
+
