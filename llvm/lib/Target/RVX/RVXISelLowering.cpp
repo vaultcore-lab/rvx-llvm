@@ -430,7 +430,7 @@ SDValue RVXTargetLowering::LowerSELECT(SDValue, Op,
 }
 
 SDValue RVXTargetLowering::LowerFormalArguments(
-    SDValue Chain, CallingConv::ID CallConv, bool isVarArg, 
+    SDValue Chain, CallingConv::ID CallConv, bool IsVarArg, 
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL, 
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const{
 
@@ -575,7 +575,7 @@ SDValue RVXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     SmallVectorImpl<ISD::InputArg> &Ins = CLI.Ins; 
     SDValue Chain = CLI.Chain; 
     SDValue Callee = CLI.Callee;  
-    bool IsVargArg = CLI.isVarArg; 
+    bool IsVargArg = CLI.IsVarArg; 
     CallingConv::ID CallConv = CLI.CallConv; 
     MachineFunction &MF = DAG.getMachineFunction();
 
@@ -700,4 +700,119 @@ SDValue RVXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     return Chain; 
 }
 
+SDValue RVXTargetLowering::LowerReturn(
+    SDValue Chain, CallingConv::ID CallConv, bool IsVarArg, 
+    const SmallVectorImpl<ISD::OutputArg> &Outs, 
+    const SmallVectorImpl<SDValue> *OutVals, const SDLoc &DL, 
+    SelectionDAG &DAG) const {
 
+    MachineFunction &MF = DAG.getMachineFunction();
+
+    SmallVector<CCValAssign, 4) RetLocs; 
+    CCState CCInfo(CallingConv, IsVarArg, MF, RetLocs, *DAG.getContext()); 
+    CCInfo.AnalyzeReturns(Outs, RET_CC_RVX); 
+
+    SDValue Glue; 
+    SmallVector<SDValue, 4> RetOps(1, Chain); 
+
+    for(unsigned i =0,e < RetLocs.size(); i != e; ++i){
+        
+        CCValAssign &VA = RetLocs[i]; 
+        SDValue Val = OutVals[i]; 
+
+        
+        // Extend the return value to the register width if needed.
+        switch (VA.getLocInfo()) {
+            case CCValAssign::Full:  break;
+            case CCValAssign::SExt:
+                Val = DAG.getNode(ISD::SIGN_EXTEND, DL, VA.getLocVT(), Val);
+                break;
+            case CCValAssign::ZExt:
+                Val = DAG.getNode(ISD::ZERO_EXTEND, DL, VA.getLocVT(), Val);
+                break;
+            case CCValAssign::AExt:
+                Val = DAG.getNode(ISD::ANY_EXTEND, DL, VA.getLocVT(), Val);
+                break;
+            case CCValAssign::BCvt:
+                Val = DAG.getNode(ISD::BITCAST, DL, VA.getLocVT(), Val);
+                break;
+            default:
+                llvm_unreachable("Unexpected LocInfo for return value");
+        }
+
+        Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), Val, Glue); 
+        Glue = Chain.getValue(1); 
+
+        RetOps.push_back(DAG.getRegister(Va.getLocReg(), VA.getLocVT())); 
+    }
+
+    RetOps[0] = Chain; 
+    if(Glue.getNode())
+        RetOps.push_back(Glue); 
+
+    return DAG.getNode(RVXISD::RET_FLAG, DL, MVT::Other, RetOps); 
+}
+
+bool RVXTargetLowering::isLegalAddressingMode(const DataLayout &DL,
+                                               const AddrMode &AM,
+                                               Type *Ty, unsigned AS,
+                                               Instruction *I) const {
+    if (AM.BaseGV)
+        return false;
+
+    if (AM.Scale != 0)
+        return false;
+
+    if (!isInt<12>(AM.BaseOffs))
+        return false;
+
+    return true;
+}
+
+bool RVXTargetLowering::isLegalICmpImmediate(int64_t Imm) const {
+  return isInt<12>(Imm);
+}
+
+bool RVXTargetLowering::isLegalAddImmediate(int64_t Imm) const {
+  return isInt<12>(Imm);
+}
+
+bool RVXTargetLowering::isTruncateFree(EVT SrcVT, EVT DstVT) const {
+  if (!SrcVT.isInteger() || !DstVT.isInteger())
+    return false;
+  return (SrcVT.getSizeInBits() > DstVT.getSizeInBits());
+}
+
+bool RVXTargetLowering::isZExtFree(SDValue Val, EVT VT2) const {
+  if (auto *LD = dyn_cast<LoadSDNode>(Val)) {
+    EVT MemVT = LD->getMemoryVT();
+    if (Val.getResNo() == 0 &&
+        LD->getExtensionType() == ISD::ZEXTLOAD &&
+        MemVT.isSimple() && MemVT.bitsLT(VT2))
+      return true;
+  }
+  return TargetLowering::isZExtFree(Val, VT2);
+}
+
+TargetLowering::ConstraintType
+RVXTargetLowering::getConstraintType(StringRef Constraint) const {
+    if (Constraint.size() == 1) {
+        switch (Constraint[0]) {
+            case 'A': return C_Memory;        // memory address (for atomics)
+            case 'I': return C_Immediate;     // 12-bit signed immediate
+            case 'J': return C_Immediate;     // zero immediate
+            case 'K': return C_Immediate;     // 5-bit unsigned (shift amount)
+            default:  break;
+        }
+    }
+    return TargetLowering::getConstraintType(Constraint);
+}
+
+unsigned RVXTargetLowering::getInlineAsmMemConstraint(
+    StringRef ConstraintCode) const {
+    if (ConstraintCode == "A")
+        // "A" = an address operand (register holding the address, no offset).
+        // Used for atomic operations: asm volatile("lr.w %0, %1" : "=r"(val) : "A"(*ptr))
+        return InlineAsm::Constraint_A;
+     return TargetLowering::getInlineAsmMemConstraint(ConstraintCode);
+}
