@@ -1,4 +1,3 @@
-include "RVXInstrFormats.td"
 
 let Namespace = "RVX" in {
     
@@ -10,7 +9,7 @@ let Namespace = "RVX" in {
     }
 
     class RVXGPRREG<bits<5> Enc, string n, list<string> alt>
-        : RVXReg<Enc, N, alt>; 
+        : RVXReg<Enc, n, alt>; 
 } 
 
 let Namespace = "RVX" in {
@@ -48,7 +47,7 @@ let Namespace = "RVX" in {
     def T6   : RVXGPRREG<31, "x31", ["t6"]>,    DwarfRegNum<[31]>;
 }
 
-def XLenVT : ValuetTypeByMode< 
+def XLenVT : ValueTypeByHwMode< 
     [RV32, RV64, DefaultMode], 
     [i32, i64, i32]
 >;
@@ -64,4 +63,4 @@ def GPR : RegisterClass<"RVX", [XLenVT], 32, (add
       [RV32,              RV64,              DefaultMode],
       [RegInfo<32,32,32>, RegInfo<64,64,64>, RegInfo<32,32,32>]
     >;
-}v
+}

@@ -1,4 +1,3 @@
-include "llvm/Target/Target.td"
 
 class Format<bits<3> val> {
 	bits<3> Value = val;
@@ -168,6 +167,7 @@ class RVXInstU<
 //===----------------------------------------------------------------------===//
 
 def IIPseudo : InstrItinClass;
+def IIAlu    : InstrItinClass;
 
 class Pseudo<
 	dag outs, dag ins,
